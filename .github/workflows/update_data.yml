@@ -1,36 +1,156 @@
-name: Radar Professional Update
+# =============================================================================
+# .github/workflows/update_data.yml  — v2.0.0 (API-based)
+# =============================================================================
+# Differenze rispetto alla v1:
+#  • Espone ELEMENT14_API_KEY, TME_API_TOKEN, TME_API_SECRET come variabili
+#    d'ambiente sicure, lette dai GitHub Secrets del repository.
+#  • Nessuna dipendenza browser/driver: il job è leggero e veloce (<60s).
+#  • Aggiunto step di validazione JSON prima del commit.
+# =============================================================================
+
+name: 🔄 Update Price Data (API)
+
 on:
-  workflow_dispatch:
   schedule:
-    - cron: '0 4 * * *'
+    - cron: "0 4 * * *"   # ogni giorno alle 04:00 UTC
+
+  workflow_dispatch:
+    inputs:
+      debug_mode:
+        description: "Abilita output di debug esteso"
+        required: false
+        default: "false"
+        type: choice
+        options: ["false", "true"]
+
+# Il token integrato di GitHub Actions deve poter scrivere sul repo
+permissions:
+  contents: write
 
 jobs:
-  update:
+  fetch-and-commit:
+    name: Fetch prezzi via API e aggiorna data.json
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
+    timeout-minutes: 10   # Le chiamate API sono veloci; 10 min è più che sufficiente
+
     steps:
-      - name: Checkout codice
-        uses: actions/checkout@v3
 
-      - name: Setup Python
-        uses: actions/setup-python@v4
+      # ── 1. Checkout ─────────────────────────────────────────────────────────
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
         with:
-          python-version: '3.9'
+          fetch-depth: 1
 
-      - name: Installa Browser e Dipendenze
+      # ── 2. Python ───────────────────────────────────────────────────────────
+      - name: 🐍 Setup Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      # ── 3. Dipendenze ───────────────────────────────────────────────────────
+      - name: 📦 Installa dipendenze
         run: |
-          pip install playwright
-          playwright install chromium
-          playwright install-deps chromium
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          echo "── Pacchetti installati ──"
+          pip show requests | grep -E "^(Name|Version):"
 
-      - name: Esecuzione Crawler
-        run: python scraper.py
-
-      - name: Salva i risultati su GitHub
+      # ── 4. Debug (opzionale) ────────────────────────────────────────────────
+      - name: 🔍 Info ambiente
+        if: ${{ github.event.inputs.debug_mode == 'true' }}
         run: |
-          git config --global user.name "RadarBot"
-          git config --global user.email "bot@radar.com"
+          python --version && pip list
+          echo "ELEMENT14_KEY presente: ${{ secrets.ELEMENT14_API_KEY != '' }}"
+          echo "TME_TOKEN presente:     ${{ secrets.TME_API_TOKEN != '' }}"
+          echo "TME_SECRET presente:    ${{ secrets.TME_API_SECRET != '' }}"
+
+      # ── 5. Esegui scraper ───────────────────────────────────────────────────
+      # Le credenziali sono iniettate come variabili d'ambiente:
+      # mai esposte nel codice, mai nei log (GitHub le maschera automaticamente).
+      - name: 🔌 Fetch prezzi via API
+        env:
+          PYTHONUNBUFFERED:  "1"
+          ELEMENT14_API_KEY: ${{ secrets.ELEMENT14_API_KEY }}
+          TME_API_TOKEN:     ${{ secrets.TME_API_TOKEN }}
+          TME_API_SECRET:    ${{ secrets.TME_API_SECRET }}
+        run: |
+          echo "── Avvio: $(date -u '+%Y-%m-%d %H:%M:%S UTC') ──"
+          python scraper.py
+          echo "── Fine:  $(date -u '+%Y-%m-%d %H:%M:%S UTC') ──"
+
+      # ── 6. Valida JSON prodotto ─────────────────────────────────────────────
+      # Blocca il commit se data.json è malformato (es. crash parziale)
+      - name: ✅ Valida data.json
+        run: |
+          python -c "
+          import json, sys
+          try:
+              with open('data.json') as f:
+                  data = json.load(f)
+              assert isinstance(data, list) and len(data) > 0, 'Array vuoto'
+              assert all('fornitori' in c for c in data), 'Campo fornitori mancante'
+              print(f'JSON valido — {len(data)} componente/i, '
+                    f'{sum(len(c[\"fornitori\"]) for c in data)} fornitori totali')
+          except Exception as e:
+              print(f'ERRORE validazione JSON: {e}')
+              sys.exit(1)
+          "
+
+      # ── 7. Controlla modifiche ──────────────────────────────────────────────
+      - name: 🔎 Verifica se data.json è cambiato
+        id: check_changes
+        run: |
+          if git diff --quiet data.json 2>/dev/null; then
+            if git ls-files --others --exclude-standard | grep -q "^data.json$"; then
+              echo "changed=true"  >> "$GITHUB_OUTPUT"
+              echo "→ data.json è NUOVO (primo run)"
+            else
+              echo "changed=false" >> "$GITHUB_OUTPUT"
+              echo "→ data.json invariato, skip commit"
+            fi
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            echo "→ data.json MODIFICATO"
+          fi
+
+      # ── 8. Configura Git ────────────────────────────────────────────────────
+      - name: ⚙️ Configura identità Git bot
+        if: steps.check_changes.outputs.changed == 'true'
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      # ── 9. Commit e Push ────────────────────────────────────────────────────
+      - name: 💾 Commit e Push data.json
+        if: steps.check_changes.outputs.changed == 'true'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TS=$(date -u '+%Y-%m-%d %H:%M UTC')
           git add data.json
-          git commit -m "Aggiornamento prezzi: $(date +'%Y-%m-%d %H:%M')" || exit 0
-          git push
+          git commit -m "chore(data): aggiorna prezzi B2B via API — ${TS}
+
+          Aggiornamento automatico tramite API ufficiali.
+          Trigger: ${{ github.event_name }} | Runner: ${{ runner.os }}"
+          git push origin HEAD
+          echo "✅ Push completato"
+
+      # ── 10. Riepilogo ───────────────────────────────────────────────────────
+      - name: 📊 Riepilogo run
+        if: always()
+        run: |
+          echo "### 🔌 Riepilogo API Price Fetch" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Campo | Valore |"                >> "$GITHUB_STEP_SUMMARY"
+          echo "|-------|--------|"                >> "$GITHUB_STEP_SUMMARY"
+          echo "| **Trigger**    | \`${{ github.event_name }}\`   |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| **Timestamp**  | \`$(date -u '+%Y-%m-%d %H:%M')\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| **Modificato** | \`${{ steps.check_changes.outputs.changed }}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| **Farnell key**| \`${{ secrets.ELEMENT14_API_KEY != '' && 'presente' || 'MANCANTE - mock'}}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| **TME creds**  | \`${{ secrets.TME_API_TOKEN != '' && 'presenti' || 'MANCANTI - mock'}}\` |" >> "$GITHUB_STEP_SUMMARY"
+          if [ -f data.json ]; then
+            echo "#### 📄 data.json corrente"  >> "$GITHUB_STEP_SUMMARY"
+            echo '```json'                     >> "$GITHUB_STEP_SUMMARY"
+            cat data.json                      >> "$GITHUB_STEP_SUMMARY"
+            echo '```'                         >> "$GITHUB_STEP_SUMMARY"
+          fi
