@@ -1,0 +1,32 @@
+[
+  {
+    "mpn": "LRS-100-12",
+    "nome": "Alimentatore Mean Well 100W 12V",
+    "fornitori": [
+      {
+        "nome": "RS Components",
+        "prezzo_unitario": 32.45,
+        "disponibilita": 540,
+        "consegna": "24h",
+        "url": "https://it.rs-online.com/web/p/alimentatori-switching/LRS-100-12",
+        "_dati_mock": true
+      },
+      {
+        "nome": "Farnell",
+        "prezzo_unitario": 29.8,
+        "disponibilita": 120,
+        "consegna": "48h",
+        "url": "https://it.farnell.com/mean-well/lrs-100-12/p/3528649",
+        "_dati_mock": true
+      },
+      {
+        "nome": "TME",
+        "prezzo_unitario": 21.9,
+        "disponibilita": 1200,
+        "consegna": "48h",
+        "url": "https://www.tme.eu/it/details/lrs-100-12/",
+        "_dati_mock": true
+      }
+    ]
+  }
+]
