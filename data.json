@@ -1,44 +1,32 @@
 [
-    {
-        "mpn": "LRS-100-12",
-        "nome": "Alimentatore Mean Well",
-        "categoria": "Elettronica",
-        "fornitori": [
-            {
-                "nome": "Fornitore A",
-                "prezzo_unitario": 25.0,
-                "disponibilita": 500,
-                "consegna": "24h",
-                "url": "#"
-            },
-            {
-                "nome": "Fornitore B",
-                "prezzo_unitario": 27.5,
-                "disponibilita": 20,
-                "consegna": "48h",
-                "url": "#"
-            }
-        ]
-    },
-    {
-        "mpn": "Farina 00 25kg",
-        "nome": "Farina professionale per Pizza",
-        "categoria": "Ristorazione",
-        "fornitori": [
-            {
-                "nome": "Fornitore A",
-                "prezzo_unitario": 15.5,
-                "disponibilita": 500,
-                "consegna": "24h",
-                "url": "#"
-            },
-            {
-                "nome": "Fornitore B",
-                "prezzo_unitario": 14.8,
-                "disponibilita": 20,
-                "consegna": "48h",
-                "url": "#"
-            }
-        ]
-    }
+  {
+    "mpn": "LRS-100-12",
+    "nome": "Alimentatore Mean Well 100W 12V",
+    "fornitori": [
+      {
+        "nome": "Farnell",
+        "prezzo_unitario": 29.8,
+        "disponibilita": 120,
+        "consegna": "48h",
+        "url": "https://it.farnell.com/search?st=LRS-100-12",
+        "_dati_mock": true
+      },
+      {
+        "nome": "TME",
+        "prezzo_unitario": 21.9,
+        "disponibilita": 1200,
+        "consegna": "48h",
+        "url": "https://www.tme.eu/it/katalog/?search=LRS-100-12",
+        "_dati_mock": true
+      },
+      {
+        "nome": "RS Components",
+        "prezzo_unitario": 32.45,
+        "disponibilita": 540,
+        "consegna": "24h",
+        "url": "https://it.rs-online.com/web/c/?searchTerm=LRS-100-12",
+        "_dati_mock": true
+      }
+    ]
+  }
 ]
