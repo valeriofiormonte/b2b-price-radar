@@ -1,1 +1,9 @@
-playwright
+# ─────────────────────────────────────────────────────────────────────────────
+# requirements.txt
+# B2B Price Fetcher — dipendenze Python
+#
+# Solo `requests` è necessario: le API ufficiali di Farnell e TME sono REST
+# standard. Nessuna libreria browser, nessun driver, nessuna dipendenza di sistema.
+# ─────────────────────────────────────────────────────────────────────────────
+
+requests==2.32.3
