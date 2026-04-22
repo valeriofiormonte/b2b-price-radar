@@ -1,210 +1,34 @@
-# =============================================================================
-# .github/workflows/update_data.yml
-# =============================================================================
-# Workflow: B2B Price Scraper — Aggiornamento automatico data.json
-#
-# Funzionamento:
-#   1. Si attiva ogni giorno alle 04:00 UTC (cron) o manualmente
-#   2. Configura Python e installa le dipendenze
-#   3. Esegue scraper.py → produce/aggiorna data.json
-#   4. Se data.json è cambiato → commit + push automatico sul repo
-#   5. Se data.json è identico → skip silenzioso (nessun commit vuoto)
-# =============================================================================
-
-name: 🔄 Update Price Data
-
-# -----------------------------------------------------------------------------
-# TRIGGERS
-# -----------------------------------------------------------------------------
+name: Update Data
 on:
-
-  # ┌─ Cron giornaliero alle 04:00 UTC (06:00 ora italiana in estate)
-  # │  Sintassi: minuto ora giorno mese giorno_settimana
   schedule:
-    - cron: "0 4 * * *"
-
-  # Attivazione manuale dalla tab "Actions" di GitHub
-  # Utile per debug o per forzare un aggiornamento on-demand
+    - cron: '0 4 * * *'
   workflow_dispatch:
-    inputs:
-      debug_mode:
-        description: "Abilita output di debug esteso"
-        required: false
-        default: "false"
-        type: choice
-        options:
-          - "false"
-          - "true"
 
-# -----------------------------------------------------------------------------
-# PERMESSI
-# Necessario: 'contents: write' affinché il GITHUB_TOKEN integrato
-# possa eseguire git push sul repository senza errori 403.
-# Il principio del minimo privilegio è rispettato: solo 'contents'.
-# -----------------------------------------------------------------------------
-permissions:
-  contents: write
-
-# -----------------------------------------------------------------------------
-# JOBS
-# -----------------------------------------------------------------------------
 jobs:
-
-  scrape-and-commit:
-    name: Scrape prezzi e aggiorna data.json
-    runs-on: ubuntu-latest  # Runner gratuito GitHub-hosted
-
-    # Timeout di sicurezza: lo scraper non può girare più di 15 minuti.
-    # Evita di bruciare minuti gratuiti in caso di hang infinito.
-    timeout-minutes: 15
-
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
+      - name: Checkout del codice
+        uses: actions/checkout@v3
 
-      # ── STEP 1: Checkout ──────────────────────────────────────────────────
-      # Clona il repository nel runner.
-      # fetch-depth: 1 → shallow clone, più veloce (non serve la storia completa)
-      - name: 📥 Checkout repository
-        uses: actions/checkout@v4
+      - name: Setup Python
+        uses: actions/setup-python@v4
         with:
-          fetch-depth: 1
+          python-version: '3.9'
 
-      # ── STEP 2: Setup Python ──────────────────────────────────────────────
-      # Installa Python 3.11 con cache pip attiva.
-      # La cache accelera i run successivi: le dipendenze non vengono
-      # riscaricate se requirements.txt non cambia.
-      - name: 🐍 Setup Python 3.11
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-          cache: "pip"               # Cache automatica della cartella pip
-
-      # ── STEP 3: Installa dipendenze ───────────────────────────────────────
-      # Se esiste un requirements.txt lo usa (best practice).
-      # Fallback: installa le librerie direttamente inline.
-      - name: 📦 Installa dipendenze Python
+      - name: Install dependencies
         run: |
-          python -m pip install --upgrade pip
+          pip install requests beautifulsoup4
 
-          # Installa da requirements.txt se presente, altrimenti inline
-          if [ -f requirements.txt ]; then
-            echo "→ Trovato requirements.txt, installo da file"
-            pip install -r requirements.txt
-          else
-            echo "→ Nessun requirements.txt, installo librerie inline"
-            pip install requests beautifulsoup4
-          fi
+      - name: Run scraper
+        run: python scraper.py
 
-          # Mostra versioni installate per tracciabilità nei log
-          echo "── Versioni installate ──"
-          pip show requests beautifulsoup4 | grep -E "^(Name|Version):"
-
-      # ── STEP 4: Debug Mode (opzionale) ───────────────────────────────────
-      # Attivo solo se il workflow è stato lanciato manualmente con debug=true.
-      # Stampa info sull'ambiente per facilitare il troubleshooting.
-      - name: 🔍 Info ambiente (debug)
-        if: ${{ github.event.inputs.debug_mode == 'true' }}
+      - name: Commit and Push dei dati
         run: |
-          echo "=== Python version ==="
-          python --version
-          echo "=== Working directory ==="
-          pwd && ls -la
-          echo "=== Pip packages ==="
-          pip list
-          echo "=== Runner OS ==="
-          uname -a
-
-      # ── STEP 5: Esegui lo scraper ─────────────────────────────────────────
-      # Esegue scraper.py e produce/aggiorna data.json.
-      # Variabile d'ambiente PYTHONUNBUFFERED=1: forza l'output immediato
-      # dei log Python nel terminale GitHub Actions (nessun buffering).
-      - name: 🕷️ Esegui scraper.py
-        env:
-          PYTHONUNBUFFERED: "1"   # Log in tempo reale nel runner
-        run: |
-          echo "── Avvio scraper: $(date -u '+%Y-%m-%d %H:%M:%S UTC') ──"
-          python scraper.py
-          echo "── Scraper completato: $(date -u '+%Y-%m-%d %H:%M:%S UTC') ──"
-
-      # ── STEP 6: Verifica se data.json è cambiato ─────────────────────────
-      # git diff --quiet restituisce exit code 1 se ci sono modifiche.
-      # Salviamo il risultato in un output del step per usarlo dopo,
-      # evitando di fare un commit vuoto se i prezzi non sono cambiati.
-      - name: 🔎 Verifica modifiche a data.json
-        id: check_changes
-        run: |
-          if git diff --quiet data.json 2>/dev/null || \
-             (git ls-files --error-unmatch data.json 2>/dev/null; [ $? -ne 0 ]); then
-
-            # Controlla se data.json è un file nuovo (untracked)
-            if git ls-files --others --exclude-standard | grep -q "^data.json$"; then
-              echo "→ data.json è un file NUOVO (primo run)"
-              echo "changed=true" >> "$GITHUB_OUTPUT"
-            else
-              echo "→ data.json NON è cambiato, skip commit"
-              echo "changed=false" >> "$GITHUB_OUTPUT"
-            fi
-          else
-            echo "→ data.json è CAMBIATO, procedo con il commit"
-            echo "changed=true" >> "$GITHUB_OUTPUT"
-          fi
-
-      # ── STEP 7: Configura identità Git del bot ────────────────────────────
-      # Necessario solo se ci sono modifiche da committare.
-      # Usa l'identità standard del GitHub Actions bot (non richiede
-      # credenziali aggiuntive né Personal Access Token).
-      - name: ⚙️ Configura Git
-        if: steps.check_changes.outputs.changed == 'true'
-        run: |
-          git config user.name  "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-
-      # ── STEP 8: Commit e Push ─────────────────────────────────────────────
-      # Eseguito SOLO se data.json ha subito modifiche (step 6).
-      # Il messaggio di commit include la data UTC per tracciabilità.
-      # Il GITHUB_TOKEN è iniettato automaticamente da GitHub Actions:
-      # non serve configurare nessun segreto aggiuntivo nel repository.
-      - name: 💾 Commit e Push data.json aggiornato
-        if: steps.check_changes.outputs.changed == 'true'
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          TIMESTAMP=$(date -u '+%Y-%m-%d %H:%M UTC')
-
+          git config --global user.name "GitHub Action"
+          git config --global user.email "action@github.com"
           git add data.json
-
-          git commit -m "chore(data): aggiorna prezzi B2B — ${TIMESTAMP}
-
-          Aggiornamento automatico eseguito da GitHub Actions.
-          Trigger: ${{ github.event_name }}
-          Runner: ${{ runner.os }}"
-
-          # Push sul branch corrente (di solito 'main')
-          git push origin HEAD
-
-          echo "✅ Push completato con successo"
-
-      # ── STEP 9: Riepilogo finale ──────────────────────────────────────────
-      # Scrive un riepilogo visibile nella tab "Summary" del workflow run.
-      # Utile per un colpo d'occhio rapido senza aprire i log completi.
-      - name: 📊 Riepilogo run
-        if: always()   # Eseguito sempre, anche se gli step precedenti falliscono
-        run: |
-          echo "### 🔄 Riepilogo Scraper Run" >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Campo | Valore |" >> "$GITHUB_STEP_SUMMARY"
-          echo "|-------|--------|" >> "$GITHUB_STEP_SUMMARY"
-          echo "| **Trigger** | \`${{ github.event_name }}\` |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| **Branch** | \`${{ github.ref_name }}\` |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| **Timestamp (UTC)** | \`$(date -u '+%Y-%m-%d %H:%M:%S')\` |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| **data.json modificato** | \`${{ steps.check_changes.outputs.changed }}\` |" >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-
-          # Mostra contenuto attuale di data.json (se esiste)
-          if [ -f data.json ]; then
-            echo "#### 📄 Contenuto data.json" >> "$GITHUB_STEP_SUMMARY"
-            echo '```json' >> "$GITHUB_STEP_SUMMARY"
-            cat data.json >> "$GITHUB_STEP_SUMMARY"
-            echo '```' >> "$GITHUB_STEP_SUMMARY"
-          else
-            echo "⚠️ data.json non trovato dopo l'esecuzione" >> "$GITHUB_STEP_SUMMARY"
-          fi
+          git commit -m "Aggiornamento dati automatico" || exit 0
+          git push
