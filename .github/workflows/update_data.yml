@@ -1,16 +1,16 @@
-name: Update Data
+name: Radar Professional Update
 on:
+  workflow_dispatch:
   schedule:
     - cron: '0 4 * * *'
-  workflow_dispatch:
 
 jobs:
-  build:
+  update:
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
-      - name: Checkout del codice
+      - name: Checkout codice
         uses: actions/checkout@v3
 
       - name: Setup Python
@@ -18,17 +18,19 @@ jobs:
         with:
           python-version: '3.9'
 
-      - name: Install dependencies
+      - name: Installa Browser e Dipendenze
         run: |
-          pip install requests beautifulsoup4
+          pip install playwright
+          playwright install chromium
+          playwright install-deps chromium
 
-      - name: Run scraper
+      - name: Esecuzione Crawler
         run: python scraper.py
 
-      - name: Commit and Push dei dati
+      - name: Salva i risultati su GitHub
         run: |
-          git config --global user.name "GitHub Action"
-          git config --global user.email "action@github.com"
+          git config --global user.name "RadarBot"
+          git config --global user.email "bot@radar.com"
           git add data.json
-          git commit -m "Aggiornamento dati automatico" || exit 0
+          git commit -m "Aggiornamento prezzi: $(date +'%Y-%m-%d %H:%M')" || exit 0
           git push
