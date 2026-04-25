@@ -1,0 +1,19 @@
+[
+  {
+    "mpn": "LRS-100-12",
+    "nome": "Alimentatore Mean Well 100W 12V",
+    "fornitori": [
+      {"nome": "RS Components", "prezzo_unitario": 32.45, "disponibilita": 540, "consegna": "24h", "url": "#", "_dati_mock": true},
+      {"nome": "Farnell",       "prezzo_unitario": 29.80, "disponibilita": 120, "consegna": "48h", "url": "#", "_dati_mock": true},
+      {"nome": "TME",           "prezzo_unitario": 21.90, "disponibilita": 1200,"consegna": "48h", "url": "#", "_dati_mock": true}
+    ],
+    "storico": [
+      {"data": "2025-04-19", "prezzi": {"RS Components": 33.10, "Farnell": 30.50, "TME": 22.40}},
+      {"data": "2025-04-20", "prezzi": {"RS Components": 32.90, "Farnell": 30.20, "TME": 22.10}},
+      {"data": "2025-04-21", "prezzi": {"RS Components": 32.70, "Farnell": 29.95, "TME": 21.75}},
+      {"data": "2025-04-22", "prezzi": {"RS Components": 33.00, "Farnell": 30.10, "TME": 22.00}},
+      {"data": "2025-04-23", "prezzi": {"RS Components": 32.60, "Farnell": 29.80, "TME": 21.90}},
+      {"data": "2025-04-24", "prezzi": {"RS Components": 32.45, "Farnell": 29.80, "TME": 21.90}}
+    ]
+  }
+]
